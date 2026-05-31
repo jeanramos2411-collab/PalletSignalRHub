@@ -394,5 +394,67 @@ namespace PalletSignalRHub.Hubs
             }
         }
 
+        // ============================================================================
+        // NUEVOS MÉTODOS PARA MÓDULO TAREO
+        // El Hub solo retransmite; la persistencia la hace la app de escritorio (BD Despachos).
+        // ============================================================================
+
+        /// <summary>
+        /// Móvil (Tareo) envía un evento de personal (ingreso/salida/almuerzo/cena/permiso).
+        /// El Hub lo retransmite al escritorio para que lo guarde en la BD Despachos.
+        /// </summary>
+        public async Task RegistrarEventoTareo(string eventoJson, string deviceId)
+        {
+            _deviceConnections[deviceId] = Context.ConnectionId;
+            _logger.LogInformation("🕒 [Tareo] Evento recibido desde dispositivo {DeviceId}", deviceId);
+
+            // Reenviar al escritorio para que lo procese y persista
+            await Clients.Others.SendAsync("OnTareoEventoRecibido", eventoJson, deviceId);
+        }
+
+        /// <summary>
+        /// Escritorio confirma al móvil el resultado del registro de tareo.
+        /// </summary>
+        public async Task SendTareoResultToMobile(string deviceId, bool success, string message)
+        {
+            if (_deviceConnections.TryGetValue(deviceId, out string? connectionId))
+            {
+                await Clients.Client(connectionId).SendAsync("OnTareoResult", deviceId, success, message);
+                _logger.LogInformation("📤 [Tareo] Resultado enviado a dispositivo {DeviceId}, Success: {Success}", deviceId, success);
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ [Tareo] Dispositivo no encontrado para resultado: {DeviceId}", deviceId);
+            }
+        }
+
+        /// <summary>
+        /// Móvil (Tareo) solicita el reporte de una fecha (yyyy-MM-dd).
+        /// El Hub lo reenvía al escritorio, que consulta la BD Despachos.
+        /// </summary>
+        public async Task RequestReporteTareo(string fecha, string deviceId)
+        {
+            _deviceConnections[deviceId] = Context.ConnectionId;
+            _logger.LogInformation("📊 [Tareo] Solicitud de reporte de fecha {Fecha} desde {DeviceId}", fecha, deviceId);
+
+            await Clients.Others.SendAsync("OnReporteTareoRequested", fecha, deviceId);
+        }
+
+        /// <summary>
+        /// Escritorio envía el reporte de tareo (JSON) al móvil solicitante.
+        /// </summary>
+        public async Task SendReporteTareoToMobile(string deviceId, string reporteJson)
+        {
+            if (_deviceConnections.TryGetValue(deviceId, out string? connectionId))
+            {
+                await Clients.Client(connectionId).SendAsync("OnReporteTareoReceived", deviceId, reporteJson);
+                _logger.LogInformation("📤 [Tareo] Reporte enviado a dispositivo {DeviceId}", deviceId);
+            }
+            else
+            {
+                _logger.LogWarning("⚠️ [Tareo] Dispositivo no encontrado para reporte: {DeviceId}", deviceId);
+            }
+        }
+
     }
 }
